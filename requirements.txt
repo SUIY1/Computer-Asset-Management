@@ -1,0 +1,5 @@
+openpyxl>=3.1.0
+wmi>=1.5.1
+pywin32>=306
+nuitka
+tkinter
