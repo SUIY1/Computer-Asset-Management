@@ -69,6 +69,7 @@ python main.py
 
 
 ## 📂 项目结构
+```text
 ├── main.py                # 程序启动入口
 ├── gui.py                 # 界面布局与多线程交互逻辑
 ├── collector.py           # 硬件采集底层模块
@@ -78,7 +79,7 @@ python main.py
 └── 数据存储/               # 自动生成的数据存放目录
     ├── brands.json        # 品牌特征库
     └── computer_assets.json # 资产历史记录
-
+```
 
 
 ## 📝 开发者感悟
