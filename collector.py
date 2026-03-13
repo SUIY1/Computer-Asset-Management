@@ -48,41 +48,119 @@ def is_temp_directory(path):
     return False
 
 
-def get_ip_address():
-    """获取本机 IP 地址"""
-    # 方法1：尝试 socket 连接（最快）
+def get_ip_and_mac_address():
+    """获取本机 IP 地址和对应的 MAC 地址（确保来自同一网卡）"""
+    # 方法 1：尝试 socket 连接获取 IP，然后找到对应网卡的 MAC
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip_address = s.getsockname()[0]
-        print(ip_address)
         s.close()
+        
         if ip_address and not ip_address.startswith('169.254.'):
-            return ip_address
+            # 找到了 IP，现在获取对应网卡的 MAC 地址
+            mac_address = get_mac_for_ip(ip_address)
+            if mac_address:
+                print(f"IP: {ip_address}, MAC: {mac_address}")
+                return ip_address, mac_address
     except:
         pass
-    # 方法2：使用系统命令
+    
+    # 方法 2：使用 PowerShell 获取有默认网关的网卡信息（最可靠）
     try:
-        # Windows 系统
         if os.name == 'nt':
-            cmd = 'powershell -Command "(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null }).IPv4Address.IPAddress"'
-            result = subprocess.run(cmd, capture_output=True,
-    creationflags=subprocess.CREATE_NO_WINDOW,   text=True, shell=True)
+            cmd = '''
+            Get-NetIPConfiguration | 
+            Where-Object { $_.IPv4DefaultGateway -ne $null } | 
+            Select-Object -First 1 | 
+            ForEach-Object {
+                [PSCustomObject]@{
+                    IPAddress = ($_.IPv4Address | Where-Object { $_.AddressFamily -eq 2 }).IPAddress
+                    MACAddress = $_.NetAdapter.MacAddress
+                }
+            }
+            '''
+            result = subprocess.run(['powershell', '-Command', cmd], capture_output=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW, text=True, encoding='gbk')
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
+                lines = result.stdout.strip().split('
+')
+                for line in lines:
+                    if ':' in line:
+                        parts = line.split(':')
+                        if len(parts) >= 2:
+                            ip = parts[0].strip()
+                            mac = parts[1].strip() if len(parts) > 1 else ""
+                            if ip and not ip.startswith('127.') and not ip.startswith('169.254.'):
+                                return ip, mac
     except:
-        return "windows识别未知"
-    # 方法3：通过主机名获取
+        pass
+    
+    # 方法 3：通过主机名获取 IP，MAC 地址尝试从所有网卡中获取
     try:
         hostname = socket.gethostname()
         for ip in socket.gethostbyname_ex(hostname)[2]:
             if ip and not ip.startswith('127.') and not ip.startswith('169.254.') and not ip.startswith('172.17.'):
-                print(socket.gethostbyname_ex(hostname)[2])
-                return ip
+                mac_address = get_mac_for_ip(ip)
+                print(f"IP: {ip}, MAC: {mac_address if mac_address else '未知'}")
+                return ip, mac_address if mac_address else "未知"
     except:
         pass
 
+    return "未知", "未知"
+
+
+def get_mac_for_ip(ip_address):
+    """根据 IP 地址获取对应网卡的 MAC 地址"""
+    try:
+        # 使用 PowerShell 精确匹配 IP 地址找到对应网卡
+        if os.name == 'nt':
+            cmd = f'''
+            Get-NetIPConfiguration | 
+            ForEach-Object {{
+                $_.IPv4Address | Where-Object {{ $_.IPAddress -eq "{ip_address}" }} | 
+                ForEach-Object {{
+                    (Get-NetAdapter -Name $_.InterfaceAlias).MacAddress
+                }}
+            }}
+            '''
+            result = subprocess.run(['powershell', '-Command', cmd], capture_output=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW, text=True, encoding='gbk')
+            if result.returncode == 0 and result.stdout.strip():
+                mac = result.stdout.strip().upper()
+                # 格式化 MAC 地址为标准格式（如：00-1A-2B-3C-4D-5E）
+                if mac and len(mac) == 12:
+                    return '-'.join([mac[i:i+2] for i in range(0, 12, 2)])
+                elif mac and '-' in mac:
+                    return mac
+                elif mac and ':' in mac:
+                    return mac.replace(':', '-')
+    except:
+        pass
+    
+    # 备用方法：使用 getmac 命令
+    try:
+        result = subprocess.run(['getmac', '/NH', '/FO', 'CSV'], capture_output=True,
+                                creationflags=subprocess.CREATE_NO_WINDOW, text=True, encoding='gbk')
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('
+')
+            for line in lines:
+                if ip_address in line or True:  # 返回第一个有效的 MAC
+                    parts = line.split(',')
+                    for part in parts:
+                        if '-' in part and len(part) == 17:
+                            return part.upper()
+    except:
+        pass
+    
     return "未知"
+
+
+def get_ip_address():
+    """获取本机 IP 地址（保留向后兼容）"""
+    ip, _ = get_ip_and_mac_address()
+    return ip
 
 
 def _format_disk_size( gb_raw):
@@ -147,7 +225,7 @@ class HardwareCollector:
         except:
             current_user = os.environ.get('USERNAME', '未知用户')
 
-        ip= get_ip_address()
+        ip, mac = get_ip_and_mac_address()
 
 
         return {
@@ -159,7 +237,8 @@ class HardwareCollector:
             "内存": memory,
             "硬盘": disk,
             "操作系统": os_info,
-            "ip地址": ip
+            "ip地址": ip,
+            "MAC 地址": mac
         }
 
     def get_brand_by_model(self, model_name):
