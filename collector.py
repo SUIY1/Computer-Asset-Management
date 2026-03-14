@@ -48,41 +48,134 @@ def is_temp_directory(path):
     return False
 
 
-def get_ip_address():
-    """获取本机 IP 地址"""
-    # 方法1：尝试 socket 连接（最快）
+def get_ip_and_mac():
+    """
+    获取当前主要网络接口的 IPv4 地址和 MAC 地址
+    - 主要网卡：优先使用默认路由所使用的 IP
+    - 如果有多个 IP 绑定在同一网卡上，会全部列出
+    返回: (ip_display, mac_address)
+    """
+    primary_ip = None
+
+    # 方法1：通过与公网地址建立 UDP 连接，获取本机对外 IPv4（最快、最稳）
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        ip_address = s.getsockname()[0]
-        print(ip_address)
+        primary_ip = s.getsockname()[0]
         s.close()
-        if ip_address and not ip_address.startswith('169.254.'):
-            return ip_address
-    except:
-        pass
-    # 方法2：使用系统命令
-    try:
-        # Windows 系统
-        if os.name == 'nt':
-            cmd = 'powershell -Command "(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null }).IPv4Address.IPAddress"'
-            result = subprocess.run(cmd, capture_output=True,
-    creationflags=subprocess.CREATE_NO_WINDOW,   text=True, shell=True)
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-    except:
-        return "windows识别未知"
-    # 方法3：通过主机名获取
-    try:
-        hostname = socket.gethostname()
-        for ip in socket.gethostbyname_ex(hostname)[2]:
-            if ip and not ip.startswith('127.') and not ip.startswith('169.254.') and not ip.startswith('172.17.'):
-                print(socket.gethostbyname_ex(hostname)[2])
-                return ip
-    except:
-        pass
+        if primary_ip and primary_ip.startswith("169.254."):
+            primary_ip = None
+    except Exception:
+        primary_ip = None
 
-    return "未知"
+    # 方法2：PowerShell 获取带默认网关的 IPv4
+    if primary_ip is None and os.name == "nt":
+        try:
+            cmd = (
+                'powershell -Command '
+                '"(Get-NetIPConfiguration | '
+                'Where-Object { $_.IPv4DefaultGateway -ne $null }).IPv4Address.IPAddress"'
+            )
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+                encoding="utf-8",
+            )
+            if result.returncode == 0:
+                text = result.stdout.strip()
+                # 可能有多行，优先第一行
+                for line in text.splitlines():
+                    ip = line.strip()
+                    if ip and not ip.startswith("169.254."):
+                        primary_ip = ip
+                        break
+        except Exception:
+            pass
+
+    # 方法3：主机名解析兜底
+    if primary_ip is None:
+        try:
+            hostname = socket.gethostname()
+            for ip in socket.gethostbyname_ex(hostname)[2]:
+                if (
+                    ip
+                    and not ip.startswith("127.")
+                    and not ip.startswith("169.254.")
+                    and not ip.startswith("172.17.")
+                ):
+                    primary_ip = ip
+                    break
+        except Exception:
+            pass
+
+    # 使用 psutil 将 IP 绑定到具体网卡，并拿到对应 MAC
+    try:
+        nic_addrs = psutil.net_if_addrs()
+    except Exception:
+        nic_addrs = {}
+
+    chosen_nic = None
+    all_addrs_on_nic = []
+    mac_addr = None
+
+    if nic_addrs:
+        # 先根据 primary_ip 找到对应网卡
+        for nic, addrs in nic_addrs.items():
+            ipv4_list = [
+                a.address
+                for a in addrs
+                if getattr(a, "family", None) == socket.AF_INET
+                and not a.address.startswith("169.254.")
+            ]
+            if primary_ip and primary_ip in ipv4_list:
+                chosen_nic = nic
+                all_addrs_on_nic = ipv4_list
+                break
+
+        # 如果没找到 primary_ip 对应的网卡，就选第一个有正常 IPv4 的网卡
+        if chosen_nic is None:
+            for nic, addrs in nic_addrs.items():
+                ipv4_list = [
+                    a.address
+                    for a in addrs
+                    if getattr(a, "family", None) == socket.AF_INET
+                    and not a.address.startswith("169.254.")
+                    and not a.address.startswith("127.")
+                ]
+                if ipv4_list:
+                    chosen_nic = nic
+                    all_addrs_on_nic = ipv4_list
+                    if primary_ip is None:
+                        primary_ip = ipv4_list[0]
+                    break
+
+        # 拿到这个网卡的 MAC
+        if chosen_nic is not None:
+            addrs = nic_addrs.get(chosen_nic, [])
+            for a in addrs:
+                # Windows 下 psutil 会把 MAC 放在 AF_LINK
+                if str(getattr(a, "family", "")) in ("AddressFamily.AF_LINK", "17") or getattr(
+                    a, "family", None
+                ) == getattr(psutil, "AF_LINK", None):
+                    if a.address and a.address != "00:00:00:00:00:00":
+                        mac_addr = a.address
+                        break
+
+    # 组合展示字符串：同一网卡上的多个 IPv4 一起展示
+    if all_addrs_on_nic:
+        ip_display = ", ".join(all_addrs_on_nic)
+    elif primary_ip:
+        ip_display = primary_ip
+    else:
+        ip_display = "未知"
+
+    if not mac_addr:
+        mac_addr = "未知"
+
+    return ip_display, mac_addr
 
 
 def _format_disk_size( gb_raw):
@@ -128,15 +221,18 @@ class HardwareCollector:
         # 3. 获取 CPU
         cpu = HardwareCollector._get_cpu()
 
-        # 4. 获取内存 (转换成 GB)
+        # 4. 获取内存 (总容量 + 详细信息)
         mem_info = psutil.virtual_memory()
-        memory = f"{round(mem_info.total / (1024 ** 3))}GB"
+        total_gb = mem_info.total / (1024 ** 3)
+        memory = HardwareCollector._format_memory_total(total_gb)
+        memory_detail = HardwareCollector._get_memory_detail()
 
         # 5. 获取硬盘 (识别 SSD/HDD)
         disk = HardwareCollector._get_disk_info()
+        disk_detail = HardwareCollector._get_disk_model_info()
 
-        # 获取操作系统信息
-        os_info = f"{platform.system()} {platform.release()}"
+        # 获取操作系统信息（使用 WMIC 兜底，尽量显示完整版本）
+        os_info = HardwareCollector._get_os_info()
 
         # 获取计算机名
         computer_name = platform.node()
@@ -147,7 +243,12 @@ class HardwareCollector:
         except:
             current_user = os.environ.get('USERNAME', '未知用户')
 
-        ip= get_ip_address()
+        # 网络信息：IP + MAC（同一网卡）
+        ip, mac = get_ip_and_mac()
+
+        # 显卡 / 主板信息
+        gpu = HardwareCollector._get_gpu_info()
+        mainboard = HardwareCollector._get_baseboard_info()
 
 
         return {
@@ -157,9 +258,14 @@ class HardwareCollector:
             "品牌": brand,
             "CPU": cpu,
             "内存": memory,
+            "内存详情": memory_detail,
             "硬盘": disk,
+            "硬盘详情": disk_detail,
             "操作系统": os_info,
-            "ip地址": ip
+            "ip地址": ip,
+            "MAC地址": mac,
+            "显卡": gpu,
+            "主板信息": mainboard,
         }
 
     def get_brand_by_model(self, model_name):
@@ -357,4 +463,282 @@ class HardwareCollector:
             return " + ".join(disks_summary)
         else:
             return "未知硬盘"
+
+    @staticmethod
+    def _get_disk_model_info():
+        """
+        获取硬盘品牌 / 型号 等更详细信息
+        例如：Samsung SSD 980 1TB (SSD:512G) + WDC WD10EZEX (机械:1T)
+        这里只关注型号文本，容量仍以 _get_disk_size 结果为准
+        """
+        disks = []
+        try:
+            cmd = "wmic diskdrive get Model,Size"
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+                encoding="gbk",
+            )
+            if res.returncode != 0:
+                return "未知"
+
+            lines = [l.strip() for l in res.stdout.splitlines() if l.strip()]
+            # 跳过表头
+            for line in lines[1:]:
+                # WMIC 输出类似：ModelText        512110190592
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                # 最后一个通常是 Size
+                size_part = parts[-1]
+                model_text = " ".join(parts[:-1])
+                size_label = ""
+                if size_part.isdigit():
+                    try:
+                        gb = int(size_part) / (1024 ** 3)
+                        size_label = _format_disk_size(gb)
+                    except Exception:
+                        size_label = ""
+
+                if size_label:
+                    disks.append(f"{model_text} ({size_label})")
+                else:
+                    disks.append(model_text)
+        except Exception:
+            return "未知"
+
+        if not disks:
+            return "未知"
+        return " + ".join(disks)
+
+    @staticmethod
+    def _format_memory_total(gb_raw: float) -> str:
+        """
+        更细粒度的内存容量归类：
+        4 / 6 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96 / 128 ...
+        """
+        if gb_raw <= 3:
+            return "2GB"
+        if gb_raw <= 5:
+            return "4GB"
+        if gb_raw <= 7:
+            return "6GB"
+        if gb_raw <= 10:
+            return "8GB"
+        if gb_raw <= 14:
+            return "12GB"
+        if gb_raw <= 20:
+            return "16GB"
+        if gb_raw <= 28:
+            return "24GB"
+        if gb_raw <= 40:
+            return "32GB"
+        if gb_raw <= 56:
+            return "48GB"
+        if gb_raw <= 72:
+            return "64GB"
+        if gb_raw <= 104:
+            return "96GB"
+        if gb_raw <= 136:
+            return "128GB"
+        return f"{round(gb_raw)}GB"
+
+    @staticmethod
+    def _get_memory_detail():
+        """
+        通过 WMIC 获取每条内存条的容量、频率，并粗略推断代际
+        形如：8GB DDR4 3200MHz x2 + 16GB DDR4 3200MHz x1
+        """
+        sticks = []
+        try:
+            cmd = "wmic memorychip get Capacity,Speed"
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+            )
+            if res.returncode != 0:
+                return "未知"
+
+            lines = [l.strip() for l in res.stdout.splitlines() if l.strip()]
+            # 跳过表头
+            for line in lines[1:]:
+                parts = line.split()
+                if not parts:
+                    continue
+                try:
+                    capacity_raw = int(parts[0])
+                except Exception:
+                    continue
+                speed = None
+                if len(parts) >= 2 and parts[1].isdigit():
+                    speed = int(parts[1])
+
+                gb = capacity_raw / (1024 ** 3)
+                gb_rounded = int(round(gb))
+
+                # 粗略推断 DDR 代际（仅作为参考）
+                if speed is None:
+                    ddr = "DDR(未知代)"
+                elif speed >= 4000:
+                    ddr = "DDR5"
+                elif speed >= 2133:
+                    ddr = "DDR4"
+                elif speed >= 1333:
+                    ddr = "DDR3"
+                else:
+                    ddr = "DDR(旧代)"
+
+                sticks.append((gb_rounded, ddr, speed))
+        except Exception:
+            return "未知"
+
+        if not sticks:
+            return "未知"
+
+        # 统计相同规格的条数
+        summary = {}
+        for gb, ddr, speed in sticks:
+            key = (gb, ddr, speed)
+            summary[key] = summary.get(key, 0) + 1
+
+        parts = []
+        for (gb, ddr, speed), count in sorted(summary.items(), key=lambda x: (x[0][1], x[0][0], x[0][2] or 0)):
+            speed_str = f"{speed}MHz" if speed else "未知频率"
+            if count > 1:
+                parts.append(f"{gb}GB {ddr} {speed_str} x{count}")
+            else:
+                parts.append(f"{gb}GB {ddr} {speed_str}")
+
+        return " + ".join(parts)
+
+    @staticmethod
+    def _get_gpu_info():
+        """获取显卡信息"""
+        # 优先使用 WMIC，兼容性较好
+        try:
+            cmd = "wmic path win32_videocontroller get Name"
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+                encoding="gbk",
+            )
+            if res.returncode == 0:
+                lines = [l.strip() for l in res.stdout.splitlines() if l.strip()]
+                # 跳过表头
+                names = [l for l in lines[1:] if l]
+                if names:
+                    return " | ".join(names)
+        except Exception:
+            pass
+
+        return "未知显卡"
+
+    @staticmethod
+    def _get_baseboard_info():
+        """获取主板简要信息：厂商 + 型号，并尝试翻译为中文品牌"""
+        try:
+            cmd = "wmic baseboard get Manufacturer,Product"
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+                encoding="gbk",
+            )
+            if res.returncode != 0:
+                return "未知主板"
+
+            lines = [l.strip() for l in res.stdout.splitlines() if l.strip()]
+            # 跳过表头，拿第一块主板的信息
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) >= 2:
+                    manufacturer_raw = parts[0]
+                    product = " ".join(parts[1:])
+
+                    m_upper = manufacturer_raw.upper()
+                    # 常见主板厂商到中文品牌的映射
+                    if "ASUS" in m_upper or "ASUSTEK" in m_upper:
+                        brand_cn = "华硕"
+                    elif "GIGABYTE" in m_upper or "TECHNOLOGYCO" in m_upper:
+                        brand_cn = "技嘉"
+                    elif "MSI" in m_upper or "MICRO-STAR" in m_upper:
+                        brand_cn = "微星"
+                    elif "ASROCK" in m_upper:
+                        brand_cn = "华擎"
+                    elif "LENOVO" in m_upper:
+                        brand_cn = "联想"
+                    elif "DELL" in m_upper:
+                        brand_cn = "戴尔"
+                    elif "HP" in m_upper or "HEWLETT-PACKARD" in m_upper:
+                        brand_cn = "惠普"
+                    elif "HUAWEI" in m_upper:
+                        brand_cn = "华为"
+                    else:
+                        brand_cn = None
+
+                    if brand_cn:
+                        return f"{brand_cn} ({manufacturer_raw}) {product}"
+                    else:
+                        return f"{manufacturer_raw} {product}"
+        except Exception:
+            pass
+
+        return "未知主板"
+
+    @staticmethod
+    def _get_os_info():
+        """
+        获取更准确的操作系统信息：
+        优先 WMIC Caption + Version + OSArchitecture，失败再回退到 platform
+        """
+        # 1. 尝试 WMIC
+        try:
+            cmd = "wmic os get Caption,Version,OSArchitecture /value"
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True,
+                shell=True,
+                encoding="gbk",
+            )
+            if res.returncode == 0 and res.stdout:
+                caption = ""
+                version = ""
+                arch = ""
+                for line in res.stdout.splitlines():
+                    line = line.strip()
+                    if not line or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip().lower()
+                    v = v.strip()
+                    if k == "caption":
+                        caption = v
+                    elif k == "version":
+                        version = v
+                    elif k == "osarchitecture":
+                        arch = v
+                parts = [p for p in [caption, version, arch] if p]
+                if parts:
+                    return " ".join(parts)
+        except Exception:
+            pass
+
+        # 2. 回退到 platform
+        try:
+            return f"{platform.system()} {platform.release()} ({platform.machine()})"
+        except Exception:
+            return "未知操作系统"
 

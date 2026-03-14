@@ -20,7 +20,7 @@ class AssetToolGUI:
         self.brands_path = get_data_file_path("brands.json")
 
         self.root.title("计算机资产管理工具 (Pro版)")
-        self.root.geometry("1300x720")
+        self.root.geometry("1500x720")
 
         # --- 1. 样式与图标设置 ---
         self.setup_styles()
@@ -109,13 +109,17 @@ class AssetToolGUI:
         self.info_vars = {
             "计算机名称": tk.StringVar(value="-"),
             "ip地址": tk.StringVar(value="-"),
+            "MAC地址": tk.StringVar(value="-"),
             "当前用户": tk.StringVar(value="-"),
             "型号": tk.StringVar(value="-"),
             "品牌": tk.StringVar(value="-"),
             "CPU": tk.StringVar(value="-"),
             "内存": tk.StringVar(value="-"),
+            "内存详情": tk.StringVar(value="-"),
             "硬盘": tk.StringVar(value="-"),
             "操作系统": tk.StringVar(value="-"),
+            "显卡": tk.StringVar(value="-"),
+            "主板信息": tk.StringVar(value="-"),
         }
         self.status_var = tk.StringVar(value="✅ 系统就绪")
         self.count_var = tk.StringVar(value="0")
@@ -167,7 +171,21 @@ class AssetToolGUI:
 
 
         # 使用 Grid 布局模仿旧版样式的网格展示
-        cols = ["计算机名称", "ip地址", "当前用户", "品牌", "型号", "操作系统", "CPU", "内存", "硬盘"]
+        cols = [
+            "计算机名称",
+            "ip地址",
+            "MAC地址",
+            "当前用户",
+            "品牌",
+            "型号",
+            "操作系统",
+            "CPU",
+            "内存",
+            "内存详情",
+            "硬盘",
+            "显卡",
+            "主板信息",
+        ]
 
         for i, key in enumerate(cols):
             row = i // 3  # 每行3个
@@ -201,8 +219,15 @@ class AssetToolGUI:
             side="right", padx=5)
         ttk.Button(btn_frame, text="📊 导出 Excel", command=self.export_excel, style='Success.TButton').pack(
             side="right", padx=5)
-        ttk.Button(btn_frame, text="💾 保存数据", command=self.save_to_json, style='Normal.TButton').pack(side="right",
-                                                                                                         padx=5)
+        ttk.Button(btn_frame, text="💾 保存数据", command=self.save_to_json, style='Normal.TButton').pack(
+            side="right", padx=5
+        )
+        ttk.Button(btn_frame, text="✏️ 编辑选中记录", command=self.edit_record, style='Normal.TButton').pack(
+            side="right", padx=5
+        )
+        ttk.Button(btn_frame, text="🗑 删除选中记录", command=self.delete_record, style='Danger.TButton').pack(
+            side="right", padx=5
+        )
 
         # === 底部：数据表格 ===
         table_frame = ttk.LabelFrame(self.root, text="🗄️ 资产列表", padding=5)
@@ -210,8 +235,23 @@ class AssetToolGUI:
 
         # 定义列
         self.columns = (
-        "计算机名称", "ip地址", "当前用户", "品牌", "型号", "CPU", "内存", "硬盘", "操作系统", "部门", "现使用人",
-        "收集时间")
+            "计算机名称",
+            "ip地址",
+            "MAC地址",
+            "当前用户",
+            "品牌",
+            "型号",
+            "CPU",
+            "内存",
+            "内存详情",
+            "硬盘",
+            "显卡",
+            "主板信息",
+            "操作系统",
+            "部门",
+            "现使用人",
+            "收集时间",
+        )
         self.tree = ttk.Treeview(table_frame, columns=self.columns, show="headings", selectmode="extended")
 
         # 滚动条
@@ -229,14 +269,31 @@ class AssetToolGUI:
 
         # 设置表头
         col_widths = {
-            "计算机名称": 120, "ip地址": 100, "当前用户": 50, "品牌": 80,
-            "型号": 120, "CPU": 200, "内存": 80, "硬盘": 200,
-            "操作系统": 150, "部门": 80, "现使用人": 80, "收集时间": 140
+            "计算机名称": 120,
+            "ip地址": 140,
+            "MAC地址": 130,
+            "当前用户": 80,
+            "品牌": 80,
+            "型号": 140,
+            "CPU": 220,
+            "内存": 80,
+            "内存详情": 180,
+            "硬盘": 220,
+            "显卡": 220,
+            "主板信息": 200,
+            "操作系统": 160,
+            "部门": 80,
+            "现使用人": 80,
+            "收集时间": 150,
         }
 
         for col in self.columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=col_widths.get(col, 100), anchor="center")
+
+        # 绑定事件：右键菜单 + 双击编辑
+        self.tree.bind("<Button-3>", self.show_context_menu)
+        self.tree.bind("<Double-1>", self.on_row_double_click)
 
 
 
@@ -261,12 +318,16 @@ class AssetToolGUI:
         # 更新顶部面板的变量
         self.info_vars["计算机名称"].set(info.get('计算机名称', '-'))
         self.info_vars["ip地址"].set(info.get('ip地址', '-'))
+        self.info_vars["MAC地址"].set(info.get('MAC地址', '-'))
         self.info_vars["当前用户"].set(info.get('当前用户', '-'))
         self.info_vars["型号"].set(info.get('型号', '-'))
         self.info_vars["品牌"].set(info.get('品牌', '-'))
         self.info_vars["CPU"].set(info.get('CPU', '-'))
         self.info_vars["内存"].set(info.get('内存', '-'))
+        self.info_vars["内存详情"].set(info.get('内存详情', '-'))
         self.info_vars["硬盘"].set(info.get('硬盘', '-'))
+        self.info_vars["显卡"].set(info.get('显卡', '-'))
+        self.info_vars["主板信息"].set(info.get('主板信息', '-'))
 
     def run_scan_thread(self):
         """多线程执行深度扫描"""
@@ -318,7 +379,7 @@ class AssetToolGUI:
         """打开手动录入窗口 (功能复刻)"""
         top = tk.Toplevel(self.root)
         top.title("手动录入资产信息")
-        top.geometry("400x550")
+        top.geometry("430x1040")
         top.attributes("-topmost", True)  # 1. 强制窗口显示在所有窗口的最前面
         top.grab_set()  # 2. 锁定焦点，此时用户无法点击主界面，必须先处理这个窗口
         top.focus_set()  # 3. 自动将输入焦点移动到这个新窗口
@@ -331,9 +392,17 @@ class AssetToolGUI:
         fields = [
             ("计算机名称", base_data.get("计算机名称", "")),
             ("ip地址", base_data.get("ip地址", "")),
+            ("MAC地址", base_data.get("MAC地址", "")),
             ("当前用户", base_data.get("当前用户", "")),
             ("品牌", base_data.get("品牌", "")),
             ("型号", base_data.get("型号", "")),
+            ("CPU", base_data.get("CPU", "")),
+            ("内存", base_data.get("内存", "")),
+            ("内存详情", base_data.get("内存详情", "")),
+            ("硬盘", base_data.get("硬盘", "")),
+            ("硬盘详情", base_data.get("硬盘详情", "")),
+            ("显卡", base_data.get("显卡", "")),
+            ("主板信息", base_data.get("主板信息", "")),
             ("部门", ""),
             ("现使用人", "")
         ]
@@ -354,7 +423,18 @@ class AssetToolGUI:
             # 补全其他信息
             new_record["收集时间"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # 确保硬件字段不会显示“手动录入”
-            for col in ["CPU", "内存", "硬盘", "操作系统"]:
+            for col in [
+                "CPU",
+                "内存",
+                "内存详情",
+                "硬盘",
+                "硬盘详情",
+                "显卡",
+                "主板信息",
+                "操作系统",
+                "MAC地址",
+                "ip地址",
+            ]:
                 if not new_record.get(col) or new_record.get(col) == "未知":
                     new_record[col] = base_data.get(col, "采集失败")
 
@@ -406,6 +486,7 @@ class AssetToolGUI:
         if item:
             self.tree.selection_set(item)
             menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="✏️ 编辑该条记录", command=self.edit_record)
             menu.add_command(label="📝 修改部门/人员信息", command=self.add_manual_info)
             menu.add_separator()
             menu.add_command(label="❌ 删除该条记录", command=self.delete_record)
@@ -433,6 +514,73 @@ class AssetToolGUI:
                 idx = self.tree.index(selected[0])
                 del self.computers_data[idx]
                 self.refresh_table()
+
+    def on_row_double_click(self, event):
+        """双击表格行，直接进入编辑模式"""
+        item = self.tree.identify_row(event.y)
+        if not item:
+            return
+        self.tree.selection_set(item)
+        self.edit_record()
+
+    def edit_record(self):
+        """编辑当前选中的整条记录（所有字段）"""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showinfo("提示", "请先选中一条需要编辑的记录。")
+            return
+
+        idx = self.tree.index(selected[0])
+        base_data = dict(self.computers_data[idx])  # 复制原始数据，避免直接修改引用
+
+        top = tk.Toplevel(self.root)
+        top.title("编辑资产记录")
+        # 稍微加高一点，保证字段完整显示
+        top.geometry("430x820")
+        top.attributes("-topmost", True)
+        top.grab_set()
+        top.focus_set()
+
+        entries = {}
+
+        # 按列顺序展示可编辑字段
+        edit_fields = [
+            "计算机名称",
+            "ip地址",
+            "MAC地址",
+            "当前用户",
+            "品牌",
+            "型号",
+            "CPU",
+            "内存",
+            "硬盘",
+            "显卡",
+            "主板信息",
+            "操作系统",
+            "部门",
+            "现使用人",
+        ]
+
+        for i, key in enumerate(edit_fields):
+            ttk.Label(top, text=f"{key}:").pack(anchor="w", padx=30, pady=(8, 0))
+            e = ttk.Entry(top, width=40)
+            e.insert(0, str(base_data.get(key, "")))
+            e.pack(padx=30, pady=3)
+            entries[key] = e
+
+        def submit_edit():
+            # 以原始记录为基础更新
+            new_record = base_data.copy()
+            for key, entry in entries.items():
+                new_record[key] = entry.get()
+
+            # 写回列表并刷新
+            self.computers_data[idx] = new_record
+            self.refresh_table()
+            top.destroy()
+            messagebox.showinfo("成功", "记录已更新")
+
+        ttk.Button(top, text="保存修改", command=submit_edit).pack(pady=20)
 
 
 

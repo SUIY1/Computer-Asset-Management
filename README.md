@@ -1,6 +1,7 @@
   
 # 💻 Computer-Asset-Management Pro
-> **基于 Python 的高效率企业级硬件资产自动采集与管理系统**
+> **基于 Python 的高效率企业级硬件资产自动采集与管理系统**  
+> *A fast hardware asset collection & management tool for Windows*
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -21,9 +22,8 @@
 - **🛡️ 退出安全防护**：拦截窗口关闭协议，确保所有变更在关闭前均已获得保存确认。
 
 ## 📸 界面预览
-*(建议在此处上传你的软件截图，并替换下方路径)*
+
 ![img.png](images/img.png)
-![img_1.png](images/img_1.png)
 
 ##  怎么用？三步搞定
     1.打开软件，点“深度采集”
@@ -81,6 +81,36 @@ python main.py
     └── computer_assets.json # 资产历史记录
 ```
 
+
+---
+
+## 🌍 English Overview
+
+### Project Description (EN)
+A Python-based hardware asset collection and management tool for Windows. It automatically captures CPU, memory, disk, mainboard, GPU, IP/MAC, and other hardware info, with smart brand recognition and one-click Excel export.
+
+### Core Features (EN)
+- **🚀 Deep hardware scan**: Background scan of CPU, memory (with DDR generation & frequency), disks (type + size + brand/model), mainboard, GPU, etc.
+- **🌐 Network fingerprint**: Detects primary active NIC, collects **all IPv4 addresses + MAC address** on that interface.
+- **🏷️ Smart brand engine**: Extensible brand database + fuzzy matching to identify brands from OEM strings.
+- **📥 Guided input**: Auto-prompt for department/user after scan; manual input form pre-fills hardware data.
+- **🗂 Editable asset table**: Double-click or right-click to edit/delete any record; toolbar buttons provided.
+- **💾 JSON storage + Excel export**: One-click export with full columns (hostname, IP, MAC, CPU, memory, disk, GPU, mainboard, OS, department, user, timestamp…).
+- **🧠 Brand library**: Add brands/models via GUI; view all brands in a popup.
+- **🛡️ Safe exit**: Prompts to save before closing.
+
+### Quick Start (EN)
+1. **Environment**: Windows 10/11, Python 3.8+  
+2. **Install**:
+   ```bash
+   git clone https://github.com/SUIY1/Computer-Asset-Management.git
+   cd Computer-Asset-Management
+   pip install -r requirements.txt
+   ```
+3. **Run**: `python main.py`  
+4. **Build EXE** *(optional)*: See Chinese section above for Nuitka command.
+
+---
 
 ## 📝 开发者感悟
 “代码是冷的，但解决问题的成就感是热的。” 
