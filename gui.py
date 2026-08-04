@@ -1052,7 +1052,7 @@ class AssetToolGUI:
                 messagebox.showerror(
                     "缺少 agent.exe",
                     "未找到编译好的 agent.exe，且本机无法自动编译。\n"
-                    "请在项目目录执行：pyinstaller -F agent.py\n"
+                    "请在项目目录执行：pyinstaller agent.spec\n"
                     "生成 agent.exe 后再点【一键生成部署包】。",
                 )
                 return
@@ -1158,8 +1158,7 @@ class AssetToolGUI:
                 capture_output=True, text=True,
             )
             r = subprocess.run(
-                [py, "-m", "PyInstaller", "-F", "--noconsole",
-                 "--name", "agent", "agent.py"],
+                [py, "-m", "PyInstaller", "agent.spec"],
                 cwd=proj_dir, capture_output=True, text=True, timeout=300,
             )
             exe = os.path.join(proj_dir, "dist", "agent.exe")

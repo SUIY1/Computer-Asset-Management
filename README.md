@@ -76,14 +76,25 @@ agent.exe --server http://192.168.1.10:8000 --dept 财务部 --user 张三
 ```
 浏览器打开 `http://中心服务器IP:8000`，即可看到所有上报设备的汇总表，随时导出 Excel / CSV。
 
-### 4. 打包采集代理（可选）
+### 4. 打包采集代理（可选 · 以 UPX 压缩为核心）
+把 `agent.py` 打成**单个、体积小巧的 `agent.exe`**，发到员工机双击即用（目标机无需安装 Python / psutil 等任何环境）。
+
+本项目采用 **PyInstaller 打包 + UPX 压缩** 的方式——UPX 是体积压缩的核心手段，`agent.spec` 里已写死 `upx=True`：
+
 ```bash
-# PyInstaller（已在 agent.spec 中配置好）
+# 1) 安装打包器
+pip install pyinstaller
+# 2)（建议）安装 UPX 并放到 PATH，PyInstaller 会自动调用它做压缩
+#    UPX 下载：https://github.com/upx/upx/releases
+# 3) 用已配置好的 spec 打包（单文件 + 无控制台 + 启用 UPX 压缩）
 pyinstaller agent.spec
-# 产物在 dist/agent.exe，单个文件即可分发
+# 产物在 dist/agent.exe，经 UPX 压缩通常可降到原体积的 30%~50%
 ```
-> 也可用原 Nuitka 方式：
-> `python -m nuitka --standalone --onefile --windows-disable-console --enable-plugin=tk-inter main.py`
+
+> 之后在桌面端点「一键生成部署包」会自动走上面流程，并把 `agent.exe` + 配置 + 品牌库打包成 `agent_deploy/` 目录，可直接分发到各员工机。
+>
+> 备选：若想进一步压缩，也可走 Nuitka 单文件方式：
+> `python -m nuitka --standalone --onefile --windows-disable-console --enable-plugin=tk-inter agent.py`
 
 ---
 
@@ -114,7 +125,7 @@ pyinstaller agent.spec
 | 硬件采集 | WMI、pywin32、psutil |
 | 中心服务端 | 标准库 `http.server`（server.py）/ Flask（web_server.py） |
 | 数据处理 | openpyxl、JSON |
-| 打包 | PyInstaller（agent.spec）/ Nuitka |
+| 打包 | PyInstaller + **UPX 压缩**（单文件 `agent.exe`，`agent.spec` 已启用 `upx=True`；Nuitka 备选） |
 
 ---
 
