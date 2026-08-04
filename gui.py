@@ -6,7 +6,15 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import threading
 import os
+import re
+import json
+import webbrowser
 from datetime import datetime
+
+
+def _is_lan_url(u):
+    """判断一个地址是否是局域网地址（http://IP:端口）"""
+    return bool(re.match(r"^https?://\d{1,3}(\.\d{1,3}){3}(:\d+)?$", u or ""))
 
 
 
@@ -111,12 +119,18 @@ class AssetToolGUI:
             "ip地址": tk.StringVar(value="-"),
             "MAC地址": tk.StringVar(value="-"),
             "当前用户": tk.StringVar(value="-"),
-            "型号": tk.StringVar(value="-"),
             "品牌": tk.StringVar(value="-"),
+            "型号": tk.StringVar(value="-"),
+            "设备类型": tk.StringVar(value="-"),
+            "序列号": tk.StringVar(value="-"),
+            "系统UUID": tk.StringVar(value="-"),
+            "主板序列号": tk.StringVar(value="-"),
+            "BIOS版本": tk.StringVar(value="-"),
             "CPU": tk.StringVar(value="-"),
             "内存": tk.StringVar(value="-"),
             "内存详情": tk.StringVar(value="-"),
             "硬盘": tk.StringVar(value="-"),
+            "硬盘健康": tk.StringVar(value="-"),
             "操作系统": tk.StringVar(value="-"),
             "显卡": tk.StringVar(value="-"),
             "主板信息": tk.StringVar(value="-"),
@@ -178,11 +192,17 @@ class AssetToolGUI:
             "当前用户",
             "品牌",
             "型号",
+            "设备类型",
+            "序列号",
+            "系统UUID",
+            "主板序列号",
+            "BIOS版本",
             "操作系统",
             "CPU",
             "内存",
             "内存详情",
             "硬盘",
+            "硬盘健康",
             "显卡",
             "主板信息",
         ]
@@ -214,6 +234,7 @@ class AssetToolGUI:
         ttk.Button(btn_frame, text="📝 录入型号", command=self.add_custom_brand_mapping).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="🏷️添加品牌", command=self.add_new_brand_only).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="🔍 查看品牌库", command=self.show_all_brands_window, style='Normal.TButton').pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🌐 批量采集", command=self.open_batch_window, style='Primary.TButton').pack(side="left", padx=5)
         # 右侧功能按钮
         ttk.Button(btn_frame, text="📂 打开数据目录", command=self.open_data_folder, style='Normal.TButton').pack(
             side="right", padx=5)
@@ -241,10 +262,16 @@ class AssetToolGUI:
             "当前用户",
             "品牌",
             "型号",
+            "设备类型",
+            "序列号",
+            "系统UUID",
+            "主板序列号",
+            "BIOS版本",
             "CPU",
             "内存",
             "内存详情",
             "硬盘",
+            "硬盘健康",
             "显卡",
             "主板信息",
             "操作系统",
@@ -274,11 +301,17 @@ class AssetToolGUI:
             "MAC地址": 130,
             "当前用户": 80,
             "品牌": 80,
-            "型号": 140,
+            "型号": 160,
+            "设备类型": 80,
+            "序列号": 150,
+            "系统UUID": 230,
+            "主板序列号": 150,
+            "BIOS版本": 110,
             "CPU": 220,
             "内存": 80,
             "内存详情": 180,
             "硬盘": 220,
+            "硬盘健康": 220,
             "显卡": 220,
             "主板信息": 200,
             "操作系统": 160,
@@ -320,12 +353,18 @@ class AssetToolGUI:
         self.info_vars["ip地址"].set(info.get('ip地址', '-'))
         self.info_vars["MAC地址"].set(info.get('MAC地址', '-'))
         self.info_vars["当前用户"].set(info.get('当前用户', '-'))
-        self.info_vars["型号"].set(info.get('型号', '-'))
         self.info_vars["品牌"].set(info.get('品牌', '-'))
+        self.info_vars["型号"].set(info.get('型号', '-'))
+        self.info_vars["设备类型"].set(info.get('设备类型', '-'))
+        self.info_vars["序列号"].set(info.get('序列号', '-'))
+        self.info_vars["系统UUID"].set(info.get('系统UUID', '-'))
+        self.info_vars["主板序列号"].set(info.get('主板序列号', '-'))
+        self.info_vars["BIOS版本"].set(info.get('BIOS版本', '-'))
         self.info_vars["CPU"].set(info.get('CPU', '-'))
         self.info_vars["内存"].set(info.get('内存', '-'))
         self.info_vars["内存详情"].set(info.get('内存详情', '-'))
         self.info_vars["硬盘"].set(info.get('硬盘', '-'))
+        self.info_vars["硬盘健康"].set(info.get('硬盘健康', '-'))
         self.info_vars["显卡"].set(info.get('显卡', '-'))
         self.info_vars["主板信息"].set(info.get('主板信息', '-'))
 
@@ -396,6 +435,9 @@ class AssetToolGUI:
             ("当前用户", base_data.get("当前用户", "")),
             ("品牌", base_data.get("品牌", "")),
             ("型号", base_data.get("型号", "")),
+            ("设备类型", base_data.get("设备类型", "")),
+            ("序列号", base_data.get("序列号", "")),
+            ("系统UUID", base_data.get("系统UUID", "")),
             ("CPU", base_data.get("CPU", "")),
             ("内存", base_data.get("内存", "")),
             ("内存详情", base_data.get("内存详情", "")),
@@ -624,6 +666,510 @@ class AssetToolGUI:
             justify="right"
         )
         personal_label.pack(side="right")  # 靠右排列
+
+    # --- 批量采集（中心服务器 + 轻量 agent）---
+    def _detect_lan_ip(self):
+        """获取本机局域网 IP，用于局域网模式下分发给其它电脑"""
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
+    def open_batch_window(self):
+        """打开批量采集中心窗口：局域网/互联网双模式、端口可配、预设地址、生成自包含部署包"""
+        from server import BatchServer, list_reports
+
+        top = tk.Toplevel(self.root)
+        top.title("🌐 批量采集中心")
+        top.geometry("660x640")
+        top.transient(self.root)
+
+        if not hasattr(self, "batch_server") or self.batch_server is None:
+            self.batch_server = BatchServer(port=8000)
+        if not hasattr(self, "batch_mode"):
+            self.batch_mode = "lan"
+        if not hasattr(self, "batch_port"):
+            self.batch_port = "8000"
+        if not hasattr(self, "saved_addresses"):
+            self.saved_addresses = self._load_saved_addresses()
+
+        lan_ip = self._detect_lan_ip()
+        mode_var = tk.StringVar(value=self.batch_mode)
+        port_var = tk.StringVar(value=self.batch_port)
+        internet_url_var = tk.StringVar(value="")
+        addr_combo_var = tk.StringVar()
+
+        tk.Label(top, text="中心采集服务器", font=("微软雅黑", 13, "bold")).pack(anchor="w", padx=16, pady=(14, 4))
+
+        # 模式选择
+        mode_frame = ttk.LabelFrame(top, text="采集模式")
+        mode_frame.pack(fill="x", padx=16, pady=(4, 2))
+        ttk.Radiobutton(mode_frame, text="局域网（服务器与目标机同一网络，零配置）",
+                        variable=mode_var, value="lan", command=lambda: on_mode_or_cfg()).pack(anchor="w", padx=8, pady=2)
+        ttk.Radiobutton(mode_frame, text="互联网（服务器有公网IP/域名，可跨网络采集）",
+                        variable=mode_var, value="internet", command=lambda: on_mode_or_cfg()).pack(anchor="w", padx=8, pady=2)
+
+        # 端口 + 互联网地址
+        cfg_frame = ttk.Frame(top)
+        cfg_frame.pack(fill="x", padx=16, pady=4)
+        tk.Label(cfg_frame, text="服务器端口：").pack(side="left")
+        port_entry = ttk.Entry(cfg_frame, textvariable=port_var, width=10)
+        port_entry.pack(side="left", padx=4)
+        ttk.Button(cfg_frame, text="应用端口", width=9,
+                   command=lambda: (apply_port() and None, refresh_status(), refresh_preview())).pack(side="left", padx=2)
+        tk.Label(cfg_frame, text="  公网/服务器地址：").pack(side="left")
+        url_entry = ttk.Entry(cfg_frame, textvariable=internet_url_var, width=34)
+        url_entry.pack(side="left", fill="x", expand=True)
+        # 输入框改动时实时刷新预览（并清除预设选择，因为手动编辑优先）
+        port_entry.bind("<KeyRelease>", lambda e: (addr_combo_var.set(""), refresh_preview()))
+        url_entry.bind("<KeyRelease>", lambda e: (addr_combo_var.set(""), refresh_preview()))
+
+        # 预设地址（可保存多个、下拉选择）
+        addr_frame = ttk.Frame(top)
+        addr_frame.pack(fill="x", padx=16, pady=2)
+        tk.Label(addr_frame, text="预设地址：").pack(side="left")
+        addr_combo = ttk.Combobox(addr_frame, textvariable=addr_combo_var, width=40,
+                                  values=self.saved_addresses, state="normal")
+        addr_combo.pack(side="left", padx=4)
+        ttk.Button(addr_frame, text="应用选中", command=lambda: apply_preset()).pack(side="left", padx=2)
+        ttk.Button(addr_frame, text="存为预设", command=lambda: save_preset()).pack(side="left", padx=2)
+        ttk.Button(addr_frame, text="删除", command=lambda: del_preset()).pack(side="left", padx=2)
+
+        url_preview_var = tk.StringVar()
+        tk.Label(top, textvariable=url_preview_var, fg="#005fb8", font=("微软雅黑", 10)).pack(anchor="w", padx=16, pady=2)
+
+        # 部署包选项（部门/使用人，可选）
+        opt_frame = ttk.LabelFrame(top, text="部署包选项（部门/使用人可选）")
+        opt_frame.pack(fill="x", padx=16, pady=4)
+        add_meta_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            opt_frame,
+            text="生成部署包时填写部门/使用人（勾选后弹窗填写）",
+            variable=add_meta_var,
+        ).pack(side="left", padx=4)
+        tk.Label(opt_frame, text="（不勾选则部署包不含部门/使用人，可之后在软件里补填）",
+                 fg="#888").pack(side="left", padx=4)
+
+        def current_server_url():
+            port = port_var.get().strip() or "8000"
+            if mode_var.get() == "lan":
+                return f"http://{lan_ip}:{port}"
+            u = internet_url_var.get().strip()
+            if not u:
+                return ""
+            if not u.lower().startswith("http"):
+                u = "http://" + u
+            return u.rstrip("/")
+
+        def get_target_url():
+            """优先使用用户在“预设地址”框里直接输入/选择的地址；否则按上方端口/公网地址推导"""
+            typed = (addr_combo_var.get() or "").strip()
+            if typed:
+                if typed.lower().startswith("http"):
+                    return typed.rstrip("/")
+                if re.match(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$", typed):
+                    return "http://" + typed
+            return current_server_url()
+
+        def refresh_preview():
+            u = get_target_url()
+            url_preview_var.set(f"目标机将上报到：{u}" if u else "请填写服务器地址（端口或公网地址）")
+
+        def on_mode_or_cfg():
+            addr_combo_var.set("")
+            refresh_preview()
+
+        def apply_preset():
+            v = get_target_url()
+            if not v:
+                messagebox.showinfo("提示", "请先在预设地址框输入或选择，或上方填写端口/公网地址")
+                return
+            if _is_lan_url(v):
+                mode_var.set("lan")
+                m = re.search(r":(\d+)", v)
+                port_var.set(m.group(1) if m else "8000")
+                internet_url_var.set("")
+            else:
+                mode_var.set("internet")
+                internet_url_var.set(v)
+            addr_combo_var.set(v)
+            refresh_preview()
+
+        def save_preset():
+            u = get_target_url()
+            if not u:
+                messagebox.showinfo("提示", "请先在预设地址框输入或选择，或上方填写端口/公网地址")
+                return
+            if u not in self.saved_addresses:
+                self.saved_addresses.append(u)
+                self._save_saved_addresses()
+                addr_combo["values"] = self.saved_addresses
+            addr_combo_var.set(u)
+            messagebox.showinfo("已保存", f"已把以下地址加入预设：\n{u}")
+
+        def del_preset():
+            v = addr_combo_var.get().strip()
+            if v in self.saved_addresses:
+                self.saved_addresses.remove(v)
+                self._save_saved_addresses()
+                addr_combo["values"] = self.saved_addresses
+                addr_combo_var.set("")
+                refresh_preview()
+
+        def apply_port():
+            try:
+                port = int(port_var.get().strip() or "8000")
+            except ValueError:
+                port = 8000
+            was_running = self.batch_server.is_running()
+            if was_running:
+                self.batch_server.stop()
+            self.batch_server = BatchServer(port=port)
+            self.batch_port = str(port)
+            self.batch_mode = mode_var.get()
+            return was_running
+
+        def save_settings():
+            was_running = apply_port()
+            if was_running:
+                ok, msg = self.batch_server.start()
+            else:
+                msg = "已保存服务器设置（当前未启动，点『启动服务器』生效）。"
+            refresh_status()
+            u = current_server_url()
+            messagebox.showinfo(
+                "已保存",
+                f"服务器设置已保存。\n端口：{self.batch_port}\n"
+                f"当前服务器地址：{u or '(互联网模式需填写公网地址)'}",
+            )
+
+        # 启停服务器
+        frm = ttk.Frame(top)
+        frm.pack(fill="x", padx=16, pady=6)
+        status_var = tk.StringVar(value="服务器未启动")
+        tk.Label(frm, textvariable=status_var, fg="#555").pack(side="left")
+        toggle_btn = ttk.Button(frm, text="▶ 启动服务器")
+
+        def refresh_status():
+            if self.batch_server.is_running():
+                status_var.set(f"● 运行中：{self.batch_server.url()}（其它机器访问 {current_server_url()}）")
+                toggle_btn.config(text="■ 停止服务器")
+            else:
+                status_var.set("服务器未启动")
+                toggle_btn.config(text="▶ 启动服务器")
+
+        def toggle():
+            was_running = apply_port()
+            if was_running:
+                self.batch_server.stop()
+            else:
+                ok, msg = self.batch_server.start()
+                status_var.set(msg)
+            refresh_status()
+
+        toggle_btn.config(command=toggle)
+        toggle_btn.pack(side="right")
+        ttk.Button(frm, text="💾 保存设置", command=save_settings).pack(side="right", padx=6)
+
+        tip = ("使用方法：\n"
+               "1) 选模式、填端口（互联网模式还需填服务器公网地址），点【保存设置】。\n"
+               "2) 点【生成部署包】→ 得到 agent_deploy 文件夹（含编译好的 agent.exe，目标机无需装任何环境）。\n"
+               "3) 把该文件夹拷到每台目标机，双击 agent.exe 即自动采集并上报。\n"
+               "提示：常用地址可点『存为预设』，下次下拉选择即可，无需重复输入。\n"
+               "局域网：同 WiFi/网段即可；互联网：服务器需有公网IP或域名（路由器端口映射或云服务器部署 server.py）。")
+        tk.Label(top, text=tip, justify="left", wraplength=620, fg="#444",
+                 font=("微软雅黑", 10)).pack(anchor="w", padx=16, pady=6)
+
+        bf = ttk.Frame(top)
+        bf.pack(fill="x", padx=16, pady=6)
+        ttk.Button(bf, text="🌐 打开仪表盘", style="Primary.TButton",
+                   command=lambda: webbrowser.open(self.batch_server.url())).pack(side="left", padx=4)
+        ttk.Button(bf, text="📥 导入已上报数据", style="Normal.TButton",
+                   command=lambda: self.import_reports(top)).pack(side="left", padx=4)
+        ttk.Button(bf, text="🔄 从服务器同步", style="Normal.TButton",
+                   command=lambda: self.sync_from_server(top)).pack(side="left", padx=4)
+        def on_generate():
+            url = get_target_url()
+            if not url:
+                messagebox.showerror("错误", "请先在上方设置并保存服务器地址（或在预设地址框输入），再生成部署包。")
+                return
+            dept = user = ""
+            if add_meta_var.get():
+                d = simpledialog.askstring("部门", "请输入部署包默认的【部门】：", parent=top)
+                if d is None:
+                    return  # 用户取消
+                u = simpledialog.askstring("使用人", "请输入部署包默认的【使用人】：", parent=top)
+                if u is None:
+                    return
+                dept, user = d.strip(), u.strip()
+            # 不勾选 → 部署包不含部门/使用人，且运行 agent 时也不弹窗询问
+            no_meta = not add_meta_var.get()
+            self.generate_agent_package(top, url, dept, user, no_meta=no_meta)
+
+        ttk.Button(bf, text="📦 一键生成部署包", style="Normal.TButton",
+                   command=on_generate).pack(side="left", padx=4)
+
+        cnt_var = tk.StringVar(value="已上报机器数：0")
+        tk.Label(top, textvariable=cnt_var, fg="#2e7d32", font=("微软雅黑", 11, "bold")).pack(anchor="w", padx=16, pady=6)
+
+        def update_cnt():
+            try:
+                cnt_var.set(f"已上报机器数：{len(list_reports())}")
+            except Exception:
+                cnt_var.set("已上报机器数：?")
+
+        refresh_preview()
+        refresh_status()
+        update_cnt()
+
+        def tick():
+            update_cnt()
+            top.after(3000, tick)
+
+        top.after(3000, tick)
+
+    def import_reports(self, parent=None):
+        """把服务器收到的上报数据导入到主资产列表（按计算机名称去重/更新）"""
+        from server import list_reports
+
+        try:
+            reports = list_reports()
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
+            return
+        if not reports:
+            messagebox.showinfo("提示", "暂无上报数据。请先启动服务器，并让其它电脑运行 agent。")
+            return
+
+        existing = {d.get("计算机名称") for d in self.computers_data}
+        updated = 0
+        for r in reports:
+            name = r.get("计算机名称")
+            if name in existing:
+                for i, d in enumerate(self.computers_data):
+                    if d.get("计算机名称") == name:
+                        self.computers_data[i] = r
+                        updated += 1
+                        break
+            else:
+                self.computers_data.append(r)
+                existing.add(name)
+
+        self.refresh_table()
+        messagebox.showinfo("完成", f"已汇总 {len(reports)} 台机器的上报数据（其中 {updated} 台为覆盖更新）。")
+
+    def sync_from_server(self, parent=None):
+        """从远程中心服务器（HTTP）拉取已上报的机器列表，合并进本机资产列表"""
+        from urllib.request import urlopen, Request
+        import json as _json
+
+        default = self.batch_server.url() if (hasattr(self, "batch_server") and self.batch_server.is_running()) else ""
+        url = simpledialog.askstring(
+            "从服务器同步",
+            "请输入中心服务器地址（含端口）：\n例如 http://192.168.1.10:8000 或 http://your.domain:8000",
+            initialvalue=default, parent=parent or self.root,
+        )
+        if not url:
+            return
+        api = url.strip().rstrip("/") + "/api/machines"
+        try:
+            req = Request(api, headers={"Accept": "application/json"})
+            with urlopen(req, timeout=15) as resp:
+                machines = _json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            messagebox.showerror(
+                "同步失败",
+                f"无法连接服务器：\n{e}\n\n请确认：服务器已启动、地址/端口正确、防火墙已放行该端口。",
+            )
+            return
+        if not isinstance(machines, list) or not machines:
+            messagebox.showinfo("提示", "服务器暂无上报数据。")
+            return
+        existing = {d.get("计算机名称") for d in self.computers_data}
+        added = updated = 0
+        for m in machines:
+            name = m.get("计算机名称")
+            if not name:
+                continue
+            if name in existing:
+                for i, d in enumerate(self.computers_data):
+                    if d.get("计算机名称") == name:
+                        self.computers_data[i] = m
+                        updated += 1
+                        break
+            else:
+                self.computers_data.append(m)
+                existing.add(name)
+                added += 1
+        self.refresh_table()
+        messagebox.showinfo("完成", f"已从服务器同步 {len(machines)} 台机器：\n新增 {added} 台，更新 {updated} 台。")
+
+    def _load_saved_addresses(self):
+        from collector import get_data_file_path
+        p = get_data_file_path("采集地址.json")
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return [str(x) for x in data]
+            except Exception:
+                pass
+        return []
+
+    def _save_saved_addresses(self):
+        from collector import get_data_file_path
+        p = get_data_file_path("采集地址.json")
+        try:
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(self.saved_addresses, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def generate_agent_package(self, parent=None, url="", dept="", user="", no_meta=False):
+        """生成自包含部署包：编译好的 agent.exe + 配置文件（含服务器地址/部门/使用人），目标机无需安装任何环境"""
+        import shutil
+        import time
+
+        if not url:
+            messagebox.showerror("错误", "请先在上方设置并保存服务器地址（局域网填端口；互联网填公网地址），再生成部署包。")
+            return
+
+        base = os.path.join("agent_deploy")
+        os.makedirs(base, exist_ok=True)
+
+        proj_dir = os.path.dirname(os.path.abspath(__file__))
+        exe_src = os.path.join(proj_dir, "agent.exe")
+        if not os.path.exists(exe_src):
+            # 没编译过则现场尝试编译（需要本机有 pyinstaller）
+            ok = self._build_agent_exe(proj_dir)
+            if not ok or not os.path.exists(exe_src):
+                messagebox.showerror(
+                    "缺少 agent.exe",
+                    "未找到编译好的 agent.exe，且本机无法自动编译。\n"
+                    "请在项目目录执行：pyinstaller -F agent.py\n"
+                    "生成 agent.exe 后再点【一键生成部署包】。",
+                )
+                return
+
+        # 拷贝 exe：先写到临时文件再原子替换；若目标 exe 正在运行被系统锁住，
+        # 会重试若干次，仍失败则给出明确中文提示，避免生成“半成品”部署包。
+        dst_exe = os.path.join(base, "agent.exe")
+        tmp_exe = os.path.join(base, "_agent_new.tmp")
+        try:
+            shutil.copyfile(exe_src, tmp_exe)
+        except Exception as e:
+            messagebox.showerror("错误", f"读取 agent.exe 失败：{e}")
+            return
+        replaced = False
+        last_err = None
+        for _ in range(8):
+            try:
+                os.replace(tmp_exe, dst_exe)
+                replaced = True
+                break
+            except PermissionError as e:
+                last_err = e
+                time.sleep(1)  # 等正在运行的旧 agent.exe 退出
+            except Exception as e:
+                last_err = e
+                break
+        if not replaced:
+            try:
+                os.remove(tmp_exe)
+            except Exception:
+                pass
+            messagebox.showerror(
+                "无法覆盖 agent.exe",
+                "目标 agent_deploy/agent.exe 正在运行或被占用"
+                "（很可能你刚才双击运行过它，或它仍在任务管理器里）。\n\n"
+                "请先关闭正在运行的 agent.exe（任务管理器结束进程），\n"
+                "再点一次【一键生成部署包】即可覆盖更新。",
+            )
+            return
+
+        # 把品牌库也带过去，保证自定义机型识别可用
+        brands_src = os.path.join(proj_dir, "数据存储", "brands.json")
+        if os.path.exists(brands_src):
+            dest_dir = os.path.join(base, "数据存储")
+            os.makedirs(dest_dir, exist_ok=True)
+            try:
+                shutil.copyfile(brands_src, os.path.join(dest_dir, "brands.json"))
+            except Exception:
+                pass
+
+        # 写入配置文件（agent.exe 启动即读取，无需命令行参数）
+        cfg = {"server": url}
+        if dept:
+            cfg["department"] = dept
+        if user:
+            cfg["user"] = user
+        if no_meta:
+            # 不勾选部门/使用人 → 运行时也不弹窗询问
+            cfg["no_meta"] = True
+        with open(os.path.join(base, "agent_config.json"), "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+        if no_meta:
+            meta_tip = "本次未包含部门/使用人，运行 agent 时也不会弹窗询问（如需填写，可改 agent_config.json 加上 department/user，或用命令行 --dept/--user）。"
+        else:
+            meta_tip = f"部门：{dept or '（未填写）'}    使用人：{user or '（未填写）'}"
+
+        readme = (
+            "计算机资产采集 Agent 部署包（自包含版）\n"
+            "======================================\n\n"
+            "【本包已编译为独立 exe，目标电脑【无需安装 Python / psutil 等任何环境】】\n\n"
+            "【使用方法】\n"
+            "1. 把整个 agent_deploy 文件夹拷到目标电脑（U盘/共享/微信都行）。\n"
+            "2. 直接双击 agent.exe，自动采集并上报到：\n"
+            f"    {url}\n\n"
+            f"    {meta_tip}\n\n"
+            "【说明】\n"
+            "  - 双击 agent.exe 即可，不需要安装、不需要管理员权限。\n"
+            "  - 改 agent_config.json 里的 server 可换服务器地址，无需重新生成。\n"
+            "  - 也可命令行：agent.exe --server http://地址:端口 --dept 部门 --user 使用人\n"
+            "  - 写共享文件夹：agent.exe --share \"\\\\\\\\服务器\\\\共享\\\\reports\"\n"
+            "  - 计划任务静默：agent.exe --no-gui\n"
+            "  - 运行日志见同目录 agent_log.txt，卡住时看同目录 采集步骤.log 定位卡点。\n"
+        )
+        with open(os.path.join(base, "README.txt"), "w", encoding="utf-8") as f:
+            f.write(readme)
+
+        msg = f"部署包已生成在：\n{base}\n\n目标机将上报到：{url}\n"
+        if not no_meta and (dept or user):
+            msg += f"部门：{dept or '空'} | 使用人：{user or '空'}\n"
+        else:
+            msg += "（未设置部门/使用人，运行时不弹窗）\n"
+        msg += "\n把整个文件夹拷到每台目标电脑，双击 agent.exe 即可。\n目标电脑无需安装任何环境、无需管理员权限。"
+        messagebox.showinfo("完成", msg)
+
+    def _build_agent_exe(self, proj_dir):
+        """尝试在本机用 PyInstaller 编译 agent.exe（仅当尚未编译时）"""
+        import subprocess
+        try:
+            py = sys.executable
+            subprocess.run(
+                [py, "-m", "pip", "install", "--quiet", "pyinstaller"],
+                capture_output=True, text=True,
+            )
+            r = subprocess.run(
+                [py, "-m", "PyInstaller", "-F", "--noconsole",
+                 "--name", "agent", "agent.py"],
+                cwd=proj_dir, capture_output=True, text=True, timeout=300,
+            )
+            exe = os.path.join(proj_dir, "dist", "agent.exe")
+            if os.path.exists(exe):
+                shutil_move = os.path.join(proj_dir, "agent.exe")
+                shutil.copyfile(exe, shutil_move)
+                return True
+            return False
+        except Exception:
+            return False
 
     def add_custom_brand_mapping(self):
         """录入品牌并存入查询使用的数据库"""

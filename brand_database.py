@@ -1,8 +1,15 @@
 # config/brand_database.py
+# 计算机品牌 / 型号识别库（二级识别：一级是 collector 里的制造商关键字表，
+# 这里是“型号名 → 品牌”的兜底库，用于制造商/厂商字段为空、只剩裸型号时的回退识别）
 
 import json
 import os
-from collector import get_data_file_path # 引用统一方法
+from collector import get_data_file_path  # 引用统一方法
+
+# 数据库结构版本：每次扩充/调整默认库时 +1。
+# 加载时若磁盘上的版本低于此值，会自动把新的默认品牌/型号合并进去，
+# 同时保留用户自己新增的品牌与型号，避免“改了代码却不生效”的问题。
+DB_VERSION = 20260723
 
 
 class BrandDatabase:
@@ -10,44 +17,29 @@ class BrandDatabase:
     def __init__(self):
         """
         初始化品牌数据库
-        :param data_dir: 数据目录路径
         """
         self.db_file = get_data_file_path("brands.json")
-        print(f"--- 数据库当前加载路径: {os.path.abspath(self.db_file)} ---")  # 加这行
         self.brands_data = self._load_database()
 
-
-
-    def _load_database(self):
-        """加载品牌数据库"""
-        # 1. 如果文件已经存在，直接读取并返回，不再看 default_data
-
-        if os.path.exists(self.db_file):
-            try:
-                with open(self.db_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    if data:  # 确保文件不是空的
-                        return data
-            except Exception as e:
-                print(f"读取JSON失败: {e}")
-
-        # 2. 只有当文件不存在或读取失败时，才使用代码里的默认数据
-        print("未检测到数据库文件，正在初始化默认数据...")
-
-        # 巨大的字典
-        default_data = {
+    # ------------------------- 默认数据（代码内置，随版本升级） -------------------------
+    @staticmethod
+    def _default_data():
+        return {
 
             "联想": [
                 "thinkpadx1carbon",
                 "thinkpadx1yoga",
                 "thinkpadx1nano",
                 "thinkpadx1fold",
+                "thinkpadx1carbon2024",
+                "thinkpadx1carbon2025",
                 "thinkpadt14",
                 "thinkpadt14s",
                 "thinkpadt16",
                 "thinkpadt480",
                 "thinkpadt580",
                 "thinke14",
+                "thinke15",
                 "thinke16",
                 "thinkpadl13",
                 "thinkpadl14",
@@ -81,6 +73,8 @@ class BrandDatabase:
                 "yoga730",
                 "yoga6",
                 "yoga5i",
+                "yogapro7",
+                "yogapro9",
                 "legion5",
                 "legion5i",
                 "legion5pro",
@@ -89,6 +83,8 @@ class BrandDatabase:
                 "legion9i",
                 "legionslim5",
                 "legionslim7",
+                "legionpro5",
+                "legionpro7",
                 "ideapadslim3",
                 "ideapadslim5",
                 "ideapadgaming3",
@@ -97,6 +93,7 @@ class BrandDatabase:
                 "thinkbook16",
                 "thinkbookplus",
                 "thinkbook13x",
+                "thinkbook16p",
                 "thinkcentrem70t",
                 "thinkcentrem70s",
                 "thinkcentrem70q",
@@ -123,6 +120,7 @@ class BrandDatabase:
                 "geekprog5000",
                 "geekpro2023",
                 "geekpro2024",
+                "geekpro2025",
                 "blade7000k",
                 "blade9000k",
                 "blade9000",
@@ -132,7 +130,9 @@ class BrandDatabase:
                 "yangtiant4900",
                 "qitiantianm430",
                 "qitiantianm450",
-                "qitiantianm455"
+                "qitiantianm455",
+                "zhaoyangk4",
+                "zhaoyangk14"
             ],
             "戴尔": [
                 "xps13",
@@ -150,11 +150,14 @@ class BrandDatabase:
                 "latitude9440",
                 "latitude7350",
                 "latitude7450",
+                "latitude9450",
                 "inspiron14",
                 "inspiron15",
                 "inspiron16",
                 "inspiron142in1",
                 "inspiron16plus",
+                "inspiron5430",
+                "inspiron5630",
                 "precision3480",
                 "precision3580",
                 "precision3581",
@@ -164,20 +167,6 @@ class BrandDatabase:
                 "precision3431",
                 "precision3440",
                 "precision3630",
-                "alienwarex14r2",
-                "alienwarex15r2",
-                "alienwarex16r1",
-                "alienwarex16r2",
-                "alienwarem15r7",
-                "alienwarem16r1",
-                "alienwarem16r2",
-                "alienwarem17r5",
-                "alienwarem18r1",
-                "alienwarem18r2",
-                "alienware16area51",
-                "alienware18area51",
-                "alienware16aurora",
-                "alienware16xaurora",
                 "g15",
                 "g16",
                 "optiplex3000micro",
@@ -223,18 +212,15 @@ class BrandDatabase:
                 "precision7820tower",
                 "precision7920tower",
                 "precision3280cff",
-                "alienwarearea51intel",
-                "alienwarearea51amd",
-                "alienwareaurora",
-                "alienwareaurorar15",
-                "alienwareaurorar16",
                 "xps8960desktop",
                 "xps8950",
                 "xps8940",
                 "inspirondesktop",
                 "inspironsmalldesktop",
                 "inspiron24allinone",
-                "inspiron27allinone"
+                "inspiron27allinone",
+                "vostro3420",
+                "vostro5620"
             ],
             "惠普": [
                 "spectrex36013",
@@ -273,6 +259,7 @@ class BrandDatabase:
                 "elitebook840g2",
                 "elitebook850g2",
                 "elitebook1040g3",
+                "elitebookx",
                 "probook440",
                 "probook450",
                 "probook460",
@@ -303,6 +290,7 @@ class BrandDatabase:
                 "elitedesk600g4sff",
                 "elitedesk600g6micro",
                 "elitedesk600g6sff",
+                "elitedesk805g8",
                 "prodesk400g7",
                 "prodesk400g9",
                 "prodesk600g4micro",
@@ -324,7 +312,9 @@ class BrandDatabase:
                 "z2tower",
                 "z4tower",
                 "z6tower",
-                "z8tower"
+                "z8tower",
+                "victus15",
+                "victus16"
             ],
             "华硕": [
                 "rogstrixscar16",
@@ -347,6 +337,7 @@ class BrandDatabase:
                 "tianxuan6pro",
                 "tianxuanair",
                 "tianxuanplus",
+                "tianxuan7",
                 "lingyao14",
                 "lingyao16",
                 "lingyaoxshuangping",
@@ -356,6 +347,7 @@ class BrandDatabase:
                 "lingyaopro16",
                 "lingyao142025",
                 "lingyaoxultra",
+                "lingyao142024",
                 "wuwei14",
                 "wuwei15",
                 "wuwei16",
@@ -375,10 +367,15 @@ class BrandDatabase:
                 "tufgaminga16",
                 "tufgamingf15",
                 "tufgamingf17",
+                "tufgaminga14",
                 "vivobooks14",
                 "vivobooks15",
                 "vivobooks16",
                 "vivobookpro",
+                "vivobookgo",
+                "zenbook14",
+                "zenbook15",
+                "zenbook16",
                 "rogstrixga15",
                 "rogstrixga35",
                 "rogstrixg10ce",
@@ -391,6 +388,7 @@ class BrandDatabase:
                 "tufgaminggt30",
                 "proartstationpd5",
                 "proartstationpa90",
+                "proartpx13",
                 "expertcenterd7sff",
                 "expertcenterd9tower",
                 "expertcentere5aio",
@@ -421,6 +419,7 @@ class BrandDatabase:
                 "macpro2023m2ultra",
                 "imac24m1",
                 "imac24m3",
+                "imac27",
                 "macminim1",
                 "macminim2",
                 "macminim2pro",
@@ -462,7 +461,9 @@ class BrandDatabase:
                 "travelmatep6",
                 "chromebookspin",
                 "chromebook314",
-                "chromebook514"
+                "chromebook514",
+                "veriton",
+                "gateway"
             ],
             "微星": [
                 "titan18hx",
@@ -513,7 +514,8 @@ class BrandDatabase:
                 "mpgtridentas",
                 "mpgininutex2",
                 "megtridentx2",
-                "megaegisti5"
+                "megaegisti5",
+                "megiraider"
             ],
             "华为": [
                 "matebookx",
@@ -523,9 +525,11 @@ class BrandDatabase:
                 "matebookxpro2019",
                 "matebookxpro2020",
                 "matebookxpro2021",
+                "matebookxpro2024",
                 "matebookxprocoreultra",
                 "matebook13",
                 "matebook14",
+                "matebook142024",
                 "matebook14coreultra",
                 "matebook14linux",
                 "matebook16",
@@ -580,6 +584,8 @@ class BrandDatabase:
                 "xiaomibookair13",
                 "xiaomibookpro14",
                 "xiaomibookpro16",
+                "xiaomibook14",
+                "xiaomibook16",
                 "xiaomiminihost",
                 "xiaomihost2023",
                 "xiaomihost2024"
@@ -651,7 +657,9 @@ class BrandDatabase:
                 "magicbook16",
                 "magicbookpro",
                 "magicbookv14",
-                "magicbookart14"
+                "magicbookart14",
+                "magicbookx14",
+                "magicbookx16"
             ],
             "机械革命": [
                 "jiguangpro",
@@ -668,7 +676,8 @@ class BrandDatabase:
                 "wujie14pro",
                 "wujie16",
                 "wujiem5",
-                "wujiem7"
+                "wujiem7",
+                "jingchen"
             ],
             "神舟": [
                 "zhanshenz7",
@@ -718,7 +727,24 @@ class BrandDatabase:
                 "aurorar13",
                 "aurorar14",
                 "aurorar15",
-                "aurorar16"
+                "aurorar16",
+                "alienwarex14r2",
+                "alienwarex15r2",
+                "alienwarex16r1",
+                "alienwarex16r2",
+                "alienwarem15r7",
+                "alienwarem16r1",
+                "alienwarem16r2",
+                "alienwarem17r5",
+                "alienwarem18r1",
+                "alienwarem18r2",
+                "alienware16area51",
+                "alienware18area51",
+                "alienware16aurora",
+                "alienware16xaurora",
+                "alienwarearea51intel",
+                "alienwarearea51amd",
+                "alienwareaurora"
             ],
             "华擎": [
                 "deskminix300",
@@ -737,29 +763,175 @@ class BrandDatabase:
                 "nuc11essential",
                 "nuc10performance",
                 "nuc9extreme"
-            ], "其他": []  # 保留"其他"类别
-
+            ],
+            "索尼": [
+                "vaio sx12",
+                "vaio sx14",
+                "vaio fz14",
+                "vaio z",
+                "vaio s11",
+                "vaio s13",
+                "sony svf",
+                "sony svt",
+                "sony sve",
+                "sony svd"
+            ],
+            "富士通": [
+                "lifebook u",
+                "lifebook e",
+                "lifebook t",
+                "lifebook a",
+                "celcius h",
+                "celcius w",
+                "fujitsu esprimo"
+            ],
+            "松下": [
+                "cf-54",
+                "cf-55",
+                "fz-55",
+                "fz-62",
+                "fz-74",
+                "toughbook",
+                "let's note",
+                "cf-sv",
+                "cf-lx"
+            ],
+            "火影": [
+                "hotwave",
+                "火影",
+                "ice",
+                "huoying"
+            ],
+            "吾空": [
+                "wookong",
+                "吾空",
+                "ak series"
+            ],
+            "玄派": [
+                "xuanpai",
+                "玄派",
+                "玄意",
+                "xuanwu"
+            ],
+            "京天": [
+                "kotin",
+                "京天",
+                "jingtian"
+            ],
+            "七彩虹": [
+                "colorful",
+                "将星",
+                "隐星",
+                "七彩虹"
+            ],
+            "同方": [
+                "tongfang",
+                "清华同方",
+                "同方",
+                "超锐"
+            ],
+            "攀升": [
+                "ipason",
+                "攀升",
+                "panson"
+            ],
+            "宁美": [
+                "ningmei",
+                "宁美"
+            ],
+            "海尔": [
+                "haier",
+                "海尔",
+                "harbot"
+            ],
+            "方正": [
+                "founder",
+                "方正",
+                "founderk"
+            ],
+            "GPD": [
+                "gpd",
+                "gpd win",
+                "gpd pocket",
+                "gpd p2"
+            ],
+            "零刻": [
+                "beelink",
+                "零刻",
+                "ser6",
+                "ser7",
+                "eq12"
+            ],
+            "其他": []  # 保留"其他"类别
         }
 
-        # 3. 初始化时顺手把这些数据存进文件，下次运行就走步骤 1 了
+    # ------------------------- 加载 / 迁移 -------------------------
+    def _load_database(self):
+        """加载品牌数据库（带版本迁移，确保代码里的扩充能生效）"""
+        # 文件已存在：读取并与最新默认数据合并（保留用户自定义）
+        if os.path.exists(self.db_file):
+            try:
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    old = json.load(f)
+                if isinstance(old, dict) and old:
+                    old_ver = (old.get("__meta__") or {}).get("version", 0)
+                    if old_ver < DB_VERSION:
+                        merged = self._migrate(old)
+                        self._save_data(merged)
+                        return merged
+                    # 已是新版本，清掉可能混入的非列表字段后返回
+                    return {k: v for k, v in old.items()
+                            if k == "__meta__" or isinstance(v, list)}
+            except Exception as e:
+                print(f"读取品牌库失败，回退默认: {e}")
+
+        # 文件不存在或读取失败：用内置默认数据初始化并落盘
+        default = self._default_data()
+        self._save_data(default)
+        return default
+
+    def _migrate(self, old):
+        """
+        把旧数据升级到最新默认：
+          - 默认品牌/型号：以最新代码为准（覆盖旧条目，修复拼写/去重）；
+          - 用户自己新增的品牌（旧数据里有、默认里没有）：整组保留；
+          - 用户给默认品牌新增的型号（旧有、默认没有）：追加保留；
+          - 戴尔里残留的 alienware 型号不带回（已并入“外星人”组，避免重复）。
+        """
+        new = self._default_data()
+        for bk, bv in old.items():
+            if bk == "__meta__":
+                continue
+            if bk not in new:
+                # 用户自定义品牌：整组保留
+                new[bk] = bv if isinstance(bv, list) else []
+        for bk, bv in new.items():
+            if not isinstance(bv, list):
+                continue
+            old_models = old.get(bk)
+            if not isinstance(old_models, list):
+                continue
+            for m in old_models:
+                if bk == "戴尔" and ("alienware" in str(m).lower() or "area51" in str(m).lower()):
+                    continue  # alienware 已并入“外星人”组
+                if m not in bv:
+                    bv.append(m)
+        new["__meta__"] = {"version": DB_VERSION}
+        return new
+
+    def _save_data(self, data):
+        """把给定的数据字典写回 brands.json"""
         try:
             with open(self.db_file, 'w', encoding='utf-8') as f:
-                json.dump(default_data, f, ensure_ascii=False, indent=4)
-        except:
-            pass
-
-        return default_data
-
-
-    def save_database(self):
-        """保存品牌数据库"""
-        try:
-            with open(self.db_file, 'w', encoding='utf-8') as f:
-                json.dump(self.brands_data, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=4)
             return True
         except Exception as e:
             print(f"保存品牌数据库失败: {e}")
             return False
+
+    def save_database(self):
+        """保存品牌数据库（对外兼容接口）"""
+        return self._save_data(self.brands_data)
 
     def detect_brand_from_model(self, model):
         """
@@ -772,14 +944,15 @@ class BrandDatabase:
             return '未知'
 
         # 2. 预处理：转小写，并去掉所有空格和特殊字符
-        # 这样 "TUF GAMING" 就会变成 "tufgaming"
         m_raw = str(model).lower().strip()
         m_compact = m_raw.replace(" ", "").replace("-", "").replace("_", "")
 
         # 3. 优先匹配：品牌名本身就在型号里
         for brand in self.brands_data.keys():
-            # 跳过 JSON 里的特殊字段（如之前建议的 pure_brands 列表）
-            if brand == "pure_brands": continue
+            if brand == "__meta__" or brand == "pure_brands":
+                continue
+            if not isinstance(self.brands_data[brand], list):
+                continue
 
             brand_clean = brand.lower().strip()
             if brand_clean in m_raw or brand_clean in m_compact:
@@ -787,32 +960,31 @@ class BrandDatabase:
 
         # 4. 次优先：遍历所有品牌下的型号列表
         for brand, models in self.brands_data.items():
-            if not isinstance(models, list): continue
+            if brand == "__meta__" or not isinstance(models, list):
+                continue
 
             for target_m in models:
-                # 处理库里的型号：转小写，去空格
                 t_clean = str(target_m).lower().strip()
                 t_compact = t_clean.replace(" ", "").replace("-", "").replace("_", "")
-
-                # 核心修正：双向包含判断
-                # 如果主板型号里包含库型号，或者库型号包含主板型号，则匹配成功
                 if t_compact and (t_compact in m_compact or m_compact in t_compact):
                     return brand
 
-        # 5. 最后一道防线：返回值改为“未知”，让 collector.py 的硬编码逻辑继续判断
-        # 只有当 collector 也识别不出时，才在 GUI 界面显示为“组装机/未知”
-        return '组装机'
+        # 5. 最后一道防线：返回“未知”
+        return '未知'
 
     def get_all_brands(self):
-        """获取所有品牌"""
-        return list(self.brands_data.keys())
+        """获取所有品牌（排除内部元信息字段）"""
+        return [b for b in self.brands_data.keys() if b != "__meta__"]
 
     def get_brand_models(self, brand_name):
         """获取指定品牌的所有型号"""
-        return self.brands_data.get(brand_name, [])
+        models = self.brands_data.get(brand_name, [])
+        return models if isinstance(models, list) else []
 
     def add_brand(self, brand_name):
         """添加新品牌"""
+        if brand_name == "__meta__":
+            return False, "该名称保留"
         if brand_name in self.brands_data:
             return False, "品牌已存在"
 
@@ -831,10 +1003,8 @@ class BrandDatabase:
         if not model_name or not isinstance(model_name, str):
             return False, "型号名称无效"
 
-        # 清理型号名称
         model_name = model_name.strip()
 
-        # 检查是否已存在
         if model_name in self.brands_data[brand_name]:
             return False, "型号已存在"
 
@@ -887,6 +1057,8 @@ class BrandDatabase:
             return brand_from_search
         else:
             for brand, models in self.brands_data.items():
+                if brand == "__meta__" or not isinstance(models, list):
+                    continue
                 for model in models:
                     if search_lower in model.lower():
                         results.append({
@@ -899,22 +1071,17 @@ class BrandDatabase:
                 return "未知"
 
     def add_pure_brand(self, brand_name):
-        """
-      简单添加品牌名，不关联型号
-      """
-
+        """简单添加品牌名，不关联型号"""
         brand_name = brand_name.strip()
         if not brand_name:
             return False, "品牌名不能为空"
-
-        # 1. 查重：不论是作为 Key 还是在型号列表里，只要出现过就算存在
+        if brand_name == "__meta__":
+            return False, "该名称保留"
         if brand_name in self.brands_data:
             return False, f"品牌 [{brand_name}] 已存在"
 
-        # 2. 追加数据：以品牌名为 Key，初始化一个空列表
         self.brands_data[brand_name] = []
 
-        # 3. 立即写入文件 (self.db_file 已经是指向“数据存储/brands.json”)
         if self.save_database():
             return True, "品牌添加成功"
         else:

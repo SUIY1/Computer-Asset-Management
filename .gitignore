@@ -1,0 +1,25 @@
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+
+# ===== 打包产物（用 PyInstaller / Nuitka 自行生成）=====
+agent.exe
+dist/
+build/
+*.spec.bak
+
+# ===== 部署包输出目录 =====
+agent_deploy/
+
+# ===== 运行时生成的数据 =====
+数据存储/导出/
+数据存储/批量上报/
+数据存储/采集地址.json
+数据存储/reports/
+
+# ===== 临时/空文件 =====
+nul
+
+# ===== 编辑器 / 系统 =====
+.DS_Store
+Thumbs.db
