@@ -76,25 +76,32 @@ agent.exe --server http://192.168.1.10:8000 --dept 财务部 --user 张三
 ```
 浏览器打开 `http://中心服务器IP:8000`，即可看到所有上报设备的汇总表，随时导出 Excel / CSV。
 
-### 4. 打包采集代理（可选 · 以 UPX 压缩为核心）
-把 `agent.py` 打成**单个、体积小巧的 `agent.exe`**，发到员工机双击即用（目标机无需安装 Python / psutil 等任何环境）。
+### 4. 打包采集代理（可选 · Nuitka + UPX）
+把 `agent.py` 用 **Nuitka 编译 + UPX 压缩** 打成**单个、体积小巧的 `agent.exe`**，发到员工机双击即用（目标机无需安装 Python / psutil 等任何环境）。
 
-本项目采用 **PyInstaller 打包 + UPX 压缩** 的方式——UPX 是体积压缩的核心手段，`agent.spec` 里已写死 `upx=True`：
+> Nuitka 把 Python 编译成 C 再打包成原生 exe（启动快、更难反编译），UPX 负责把最终 exe 进一步压缩体积——两者配合是本项目的推荐打包方式。
 
+**方式一：一键脚本（推荐，Windows 上双击即可）**
 ```bash
-# 1) 安装打包器
-pip install pyinstaller
-# 2)（建议）安装 UPX 并放到 PATH，PyInstaller 会自动调用它做压缩
-#    UPX 下载：https://github.com/upx/upx/releases
-# 3) 用已配置好的 spec 打包（单文件 + 无控制台 + 启用 UPX 压缩）
-pyinstaller agent.spec
-# 产物在 dist/agent.exe，经 UPX 压缩通常可降到原体积的 30%~50%
+pip install nuitka psutil
+# 把 upx.exe 放到 PATH（下载：https://github.com/upx/upx/releases）
+build_agent.bat
+# 产物在 dist/agent.exe
 ```
 
-> 之后在桌面端点「一键生成部署包」会自动走上面流程，并把 `agent.exe` + 配置 + 品牌库打包成 `agent_deploy/` 目录，可直接分发到各员工机。
+**方式二：命令行**
+```bash
+pip install nuitka psutil
+python -m nuitka --standalone --onefile --windows-disable-console ^
+  --enable-plugin=tk-inter --include-module=psutil ^
+  --assume-yes-for-downloads --output-dir=dist --output-filename=agent.exe ^
+  --upx-binary=upx agent.py
+```
+
+> 说明：首次构建 Nuitka 会自动下载 C 编译器（MinGW），需联网；`--upx-binary=upx` 要求本机已装 UPX 且在 PATH，否则跳过压缩。
+> 桌面端点「一键生成部署包」会自动走上述 Nuitka 流程，并把 `agent.exe` + 配置 + 品牌库打包成 `agent_deploy/` 目录直接分发。
 >
-> 备选：若想进一步压缩，也可走 Nuitka 单文件方式：
-> `python -m nuitka --standalone --onefile --windows-disable-console --enable-plugin=tk-inter agent.py`
+> 备选（PyInstaller）：沿用 `agent.spec`（已启用 `upx=True`）也是可行的，但本项目主推 Nuitka + UPX。
 
 ---
 
@@ -108,7 +115,8 @@ pyinstaller agent.spec
 ├── agent.py             # 采集代理（可打包为 agent.exe，部署到员工机）
 ├── server.py            # 中心服务器（纯标准库，零依赖）
 ├── web_server.py        # 中心服务器（Flask 版，适合上云）
-├── agent.spec           # PyInstaller 打包配置
+├── agent.spec           # PyInstaller 打包配置（备选方案）
+├── build_agent.bat      # 一键用 Nuitka + UPX 打包 agent.exe（Windows）
 ├── requirements.txt     # 依赖列表
 ├── 网站版部署说明.md      # 网页/云部署详细步骤
 ├── images/              # 界面截图
@@ -125,7 +133,7 @@ pyinstaller agent.spec
 | 硬件采集 | WMI、pywin32、psutil |
 | 中心服务端 | 标准库 `http.server`（server.py）/ Flask（web_server.py） |
 | 数据处理 | openpyxl、JSON |
-| 打包 | PyInstaller + **UPX 压缩**（单文件 `agent.exe`，`agent.spec` 已启用 `upx=True`；Nuitka 备选） |
+| 打包 | **Nuitka 编译 + UPX 压缩**（单文件 `agent.exe`，`build_agent.bat` 一键构建；PyInstaller `agent.spec` 备选） |
 
 ---
 

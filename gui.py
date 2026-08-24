@@ -1052,7 +1052,11 @@ class AssetToolGUI:
                 messagebox.showerror(
                     "缺少 agent.exe",
                     "未找到编译好的 agent.exe，且本机无法自动编译。\n"
-                    "请在项目目录执行：pyinstaller agent.spec\n"
+                    "请先安装依赖（pip install nuitka psutil），并确保 upx 在 PATH；\n"
+                    "再双击 build_agent.bat，或执行：\n"
+                    "python -m nuitka --standalone --onefile --windows-disable-console "
+                    "--enable-plugin=tk-inter --include-module=psutil "
+                    "--output-dir=dist --output-filename=agent.exe --upx-binary=upx agent.py\n"
                     "生成 agent.exe 后再点【一键生成部署包】。",
                 )
                 return
@@ -1149,22 +1153,39 @@ class AssetToolGUI:
         messagebox.showinfo("完成", msg)
 
     def _build_agent_exe(self, proj_dir):
-        """尝试在本机用 PyInstaller 编译 agent.exe（仅当尚未编译时）"""
+        """尝试在本机用 Nuitka + UPX 编译 agent.exe（仅当尚未编译时）"""
+        import shutil
         import subprocess
         try:
             py = sys.executable
             subprocess.run(
-                [py, "-m", "pip", "install", "--quiet", "pyinstaller"],
+                [py, "-m", "pip", "install", "--quiet", "nuitka"],
                 capture_output=True, text=True,
             )
+            # UPX 是压缩核心：本机装了 upx 且在 PATH 才启用压缩，否则仅构建并提示
+            upx_flag = []
+            if shutil.which("upx"):
+                upx_flag = ["--upx-binary=upx"]
+            else:
+                print("[警告] 未检测到 upx，已跳过 UPX 压缩；"
+                      "安装 upx 并加入 PATH 后可获得更小体积的 exe。")
+            cmd = [
+                py, "-m", "nuitka",
+                "--standalone", "--onefile",
+                "--windows-disable-console",
+                "--enable-plugin=tk-inter",
+                "--include-module=psutil",
+                "--assume-yes-for-downloads",
+                "--output-dir=dist",
+                "--output-filename=agent.exe",
+            ] + upx_flag + ["agent.py"]
             r = subprocess.run(
-                [py, "-m", "PyInstaller", "agent.spec"],
-                cwd=proj_dir, capture_output=True, text=True, timeout=300,
+                cmd,
+                cwd=proj_dir, capture_output=True, text=True, timeout=1200,
             )
             exe = os.path.join(proj_dir, "dist", "agent.exe")
             if os.path.exists(exe):
-                shutil_move = os.path.join(proj_dir, "agent.exe")
-                shutil.copyfile(exe, shutil_move)
+                shutil.copyfile(exe, os.path.join(proj_dir, "agent.exe"))
                 return True
             return False
         except Exception:
